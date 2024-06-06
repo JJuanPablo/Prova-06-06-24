@@ -1,0 +1,210 @@
+#include <LiquidCrystal.h>
+
+
+// conexao fisica
+LiquidCrystal lcd(0, 1, 2, 3, 4, 5);
+const int rows[] = {6, 7, 8, 9};
+const int cols[] = {10, 11, 12, 13};
+
+
+
+
+//define uma matriz de caracteres 
+//que mapeia as teclas do teclado matricial 4x4
+const char chaveKeyJuan[4][4] = {
+  {'1', '2', '3', 'A'},
+  {'4', '5', '6', 'B'},
+  {'7', '8', '9', 'C'},
+  {'*', '0', '#', 'D'}
+};
+
+
+//variáveis globais que serão usadas 
+//para armazenar o estado do sistema de controle de acesso
+String masterCode = ""; 
+String enteredCode = ""; 
+bool isLoggedIn = false; 
+
+
+void setup() {
+  // iniciando display LCD
+  lcd.begin(16, 2);
+  
+  for (int i = 0; i < 4; i++) {
+    pinMode(rows[i], INPUT_PULLUP);
+    pinMode(cols[i], OUTPUT);
+    digitalWrite(cols[i], HIGH);
+  }
+  lcd.setCursor(0, 0);
+  lcd.print("Acesso Arduino");
+  delay(2000);
+  lcd.clear();
+  mostrarTelaMenu();
+}
+
+
+
+
+void loop() {
+  // Chama a função que verifica e retorna se alguma tecla for pressionada
+  char key = VarreduraDeTeclado();
+  // se retornar 0, nao tem tecla pressionada
+  if (key > 0) {
+    Serial.print("Tecla Pressionada: "); 
+    Serial.println(key); 
+
+    if (isLoggedIn) {
+      conectado(key);
+    } else {
+      desconectado(key);
+    }
+  }
+}
+
+void desconectado(char key) {
+  //verifica se a tecla # foi pressionada
+  if (key == '#') {
+    //verifica se o codigo digitado é igual ao codigo
+    //mestre ou se o codigo mestre esta vazio
+    if (enteredCode == masterCode || masterCode == "") {
+      //define o estado de ligin como verdadeiro
+      isLoggedIn = true;
+      //limpa o display
+      lcd.clear();
+      //exibe a mensagem de acesso
+      lcd.print("Acesso Permitido");
+      delay(2000);
+      lcd.clear();
+      //mostra o menu principal
+      mostrarTelaMenu();
+    } else {
+      //caso ao contrario, exibe a tela de acesso negado
+      lcd.clear();
+      lcd.print("Acesso Negado");
+      delay(2000);
+      lcd.clear();
+      enteredCode = "";
+      mostrarTelaMenu();
+    }
+  } else if (key == '*') {
+    //caso a tecla # seja pressionada, limpa o codigo digitado
+    // e mostra o menu principal
+    enteredCode = "";
+    lcd.clear();
+    mostrarTelaMenu();
+  } else {
+    //caso contrario, concatena a tecla pressionada ao
+    // codigo digitado e exibe no display
+    enteredCode += key;
+    lcd.setCursor(0, 1);
+    lcd.print(enteredCode);
+  }
+}
+
+void conectado(char key) {
+  //executa ação com base na tecla pressionada
+  switch (key) {
+    case 'A':
+    //exibe mensagem para cadastrar uma nova senha
+      lcd.clear();
+      lcd.print("Cadastrar Senha:");
+      enteredCode = "";
+      aguardarEntradaCode();
+      masterCode = enteredCode;
+      lcd.clear();
+      lcd.print("Senha Cadastrada");
+      delay(2000);
+      lcd.clear();
+      mostrarTelaMenu();
+      break;
+    case 'B':
+    //limpa o codigo mestre, exibindo mensagem que a senha foi excluida
+      masterCode = "";
+      lcd.clear();
+      lcd.print("Senha Excluida");
+      delay(2000);
+      lcd.clear();
+      mostrarTelaMenu();
+      break;
+    case 'C':
+    //exibe a senha mestre no display
+      lcd.clear();
+      lcd.print("Senha: ");
+      lcd.setCursor(0, 1);
+      lcd.print(masterCode);
+      delay(3000);
+      lcd.clear();
+      mostrarTelaMenu();
+      break;
+    case 'D':
+    //define o estado de login como falso, exibindo mensagem de deslogado
+      isLoggedIn = false;
+      lcd.clear();
+      lcd.print("Deslogado");
+      delay(2000);
+      lcd.clear();
+      mostrarTelaMenu();
+      break;
+  }
+}
+
+void aguardarEntradaCode() {
+  char key;
+  while ((key = VarreduraDeTeclado()) != '#') {
+    if (key) {
+      Serial.print("Tecla Pressionada na Senha: "); 
+      Serial.println(key); 
+      enteredCode += key;
+      lcd.setCursor(0, 1);
+      lcd.print(enteredCode);
+    }
+  }
+}
+
+void mostrarTelaMenu() {
+  //mostra o menu principal com base no estado de login
+  if (isLoggedIn) {
+    //se estiver logado, mostra opções para cadastrar senha e excluir senha
+    // ver e desligar
+    lcd.setCursor(0, 0);
+    lcd.print("A: Cadastrar Senha");
+    lcd.setCursor(0, 1);
+    lcd.print("B: Excluir Senha");
+    delay(2000);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("C: Ver Senha");
+    lcd.setCursor(0, 1);
+    lcd.print("D: Logoff");
+  } else {
+    //caso contrario solicita a digitação da senha
+    lcd.setCursor(0, 0);
+    lcd.print("Digite a Senha:");
+    lcd.setCursor(0, 1);
+    lcd.print(enteredCode);  // aqui mostra o código digitado
+  }
+}
+
+char VarreduraDeTeclado() {
+  // escaneia o teclado e retorna a tecla pressionada
+  char ret = 0;
+
+  for (int i = 0; i < 4; i++) {
+    
+    digitalWrite(cols[i], LOW);
+    // verificar em todas as entradas 
+    // se tem algum sinal em nível ogico baixo 
+    for (int j = 0; j < 4; j++) {
+      // verificar se tem sinal nos pinos de entrada em nível lógico baixo
+      if (digitalRead(rows[j]) == LOW) {
+        ret = chaveKeyJuan[j][i];
+        // esperar a tecla ser solta para evitar varias leituras
+        while (digitalRead(rows[j]) == LOW) { delay(10); }
+      }
+    }
+    // colocar o pino de saída em nível logico alto
+    digitalWrite(cols[i], HIGH);
+  }
+ 
+  return ret;
+}
